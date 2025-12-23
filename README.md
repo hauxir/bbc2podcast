@@ -20,6 +20,10 @@ https://www.bbc.co.uk/programmes/b00v4tv3
                                   this is the programme ID
 ```
 
+Tested with:
+- [Benji B](https://www.bbc.co.uk/programmes/b00v4tv3) (`b00v4tv3`)
+- [Essential Mix](https://www.bbc.co.uk/programmes/b006ww1y) (`b006ww1y`)
+
 ## Docker (Recommended)
 
 ### Quick Start
