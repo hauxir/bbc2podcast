@@ -4,3 +4,5 @@ __pycache__/
 .ruff_cache/
 data/audio/
 data/episodes.json
+docker-compose.yml
+.DS_Store
