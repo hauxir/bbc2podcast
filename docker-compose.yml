@@ -1,0 +1,52 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "5000:5000"
+    environment:
+      # Configure your VPN provider - see https://github.com/qdm12/gluetun-wiki
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=wireguard
+      # Example for Mullvad:
+      # - VPN_SERVICE_PROVIDER=mullvad
+      # - WIREGUARD_PRIVATE_KEY=your_private_key
+      # - WIREGUARD_ADDRESSES=10.x.x.x/32
+      # - SERVER_COUNTRIES=UK
+    volumes:
+      - gluetun_data:/gluetun
+    restart: unless-stopped
+
+  bbc2podcast:
+    build: .
+    container_name: bbc2podcast
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      - PROGRAMME_ID=${PROGRAMME_ID:-b00v4tv3}
+    volumes:
+      - ./data:/app/data
+    labels:
+      - "ofelia.enabled=true"
+      - "ofelia.job-exec.update.schedule=0 0 3 * * *"
+      - "ofelia.job-exec.update.command=uv run python -m bbc2podcast.update"
+    restart: unless-stopped
+
+  ofelia:
+    image: mcuadros/ofelia:latest
+    container_name: ofelia
+    depends_on:
+      - bbc2podcast
+    command: daemon --docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+volumes:
+  gluetun_data:

@@ -1,0 +1,30 @@
+[project]
+name = "bbc2podcast"
+version = "0.1.0"
+description = "BBC programme to podcast RSS feed generator"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.127.0",
+    "feedgen>=1.0.0",
+    "uvicorn>=0.40.0",
+    "yt-dlp>=2025.12.8",
+]
+
+[project.scripts]
+update-episodes = "bbc2podcast.update:main"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.36.2",
+    "ruff>=0.14.10",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
