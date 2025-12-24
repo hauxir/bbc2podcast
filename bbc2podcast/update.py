@@ -33,9 +33,16 @@ def load_episodes() -> list[dict]:
 
 
 def save_episodes(episodes: list[dict]) -> None:
-    """Save episode metadata to JSON."""
+    """Save episode metadata to JSON, deduplicating by ID."""
+    # Deduplicate by ID before saving
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for ep in episodes:
+        if ep["id"] not in seen:
+            seen.add(ep["id"])
+            unique.append(ep)
     with open(EPISODES_FILE, "w") as f:
-        json.dump(episodes, f, indent=2)
+        json.dump(unique, f, indent=2)
 
 
 def get_available_episodes() -> list[str]:
