@@ -13,11 +13,19 @@ app = FastAPI()
 
 
 def load_episodes() -> list[dict]:
-    """Load episode metadata from JSON file."""
+    """Load episode metadata from JSON file, deduplicating by ID."""
     if not EPISODES_FILE.exists():
         return []
     with open(EPISODES_FILE) as f:
-        return json.load(f)
+        episodes = json.load(f)
+    # Deduplicate by ID, keeping the first occurrence
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for ep in episodes:
+        if ep["id"] not in seen:
+            seen.add(ep["id"])
+            unique.append(ep)
+    return unique
 
 
 def generate_feed(base_url: str) -> str:
