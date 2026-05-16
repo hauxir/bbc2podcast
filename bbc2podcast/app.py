@@ -1,24 +1,47 @@
-"""FastAPI app serving podcast RSS feed and audio files."""
+"""FastAPI app serving podcast RSS feeds and audio files."""
 
 import json
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from feedgen.feed import FeedGenerator
 
-from bbc2podcast.config import AUDIO_DIR, DATA_DIR, EPISODES_FILE, get_programme_info
+from bbc2podcast.config import (
+    DATA_DIR,
+    DEFAULT_PROGRAMME_ID,
+    PROGRAMME_IDS,
+    audio_dir,
+    episodes_file,
+    get_programme_info,
+    migrate_legacy_data,
+    programme_dir,
+)
 
 app = FastAPI()
 
 
-def load_episodes() -> list[dict]:
-    """Load episode metadata from JSON file, deduplicating by ID."""
-    if not EPISODES_FILE.exists():
+@app.on_event("startup")
+def _startup() -> None:
+    DATA_DIR.mkdir(exist_ok=True)
+    migrate_legacy_data()
+    for pid in PROGRAMME_IDS:
+        programme_dir(pid).mkdir(parents=True, exist_ok=True)
+        audio_dir(pid).mkdir(parents=True, exist_ok=True)
+
+
+def _require_programme(programme_id: str) -> None:
+    if programme_id not in PROGRAMME_IDS:
+        raise HTTPException(status_code=404, detail="Unknown programme")
+
+
+def load_episodes(programme_id: str) -> list[dict]:
+    """Load episode metadata for a programme, deduplicating by ID."""
+    path = episodes_file(programme_id)
+    if not path.exists():
         return []
-    with open(EPISODES_FILE) as f:
+    with open(path) as f:
         episodes = json.load(f)
-    # Deduplicate by ID, keeping the first occurrence
     seen: set[str] = set()
     unique: list[dict] = []
     for ep in episodes:
@@ -28,20 +51,22 @@ def load_episodes() -> list[dict]:
     return unique
 
 
-def generate_feed(base_url: str) -> str:
-    """Generate podcast RSS feed XML."""
-    episodes = load_episodes()
-    info = get_programme_info()
+def generate_feed(programme_id: str, base_url: str) -> str:
+    """Generate podcast RSS feed XML for a programme."""
+    episodes = load_episodes(programme_id)
+    info = get_programme_info(programme_id)
+
+    feed_url = f"{base_url}/{programme_id}/feed.xml"
 
     fg = FeedGenerator()
     fg.load_extension("podcast")
     podcast: Any = getattr(fg, "podcast")
 
-    fg.id(f"{base_url}/feed.xml")
+    fg.id(feed_url)
     fg.title(info.title)
     fg.description(info.description)
     fg.link(href=base_url, rel="alternate")
-    fg.link(href=f"{base_url}/feed.xml", rel="self")
+    fg.link(href=feed_url, rel="self")
     fg.language("en")
     podcast.itunes_category("Music")
     podcast.itunes_author("BBC")
@@ -56,7 +81,7 @@ def generate_feed(base_url: str) -> str:
         fe.description(ep.get("description", ""))
         fe.published(ep["published"])
 
-        audio_url = f"{base_url}/audio/{ep['filename']}"
+        audio_url = f"{base_url}/{programme_id}/audio/{ep['filename']}"
         fe.enclosure(audio_url, str(ep.get("filesize", 0)), "audio/mpeg")
         entry_podcast: Any = getattr(fe, "podcast")
         entry_podcast.itunes_duration(ep.get("duration", 0))
@@ -66,28 +91,58 @@ def generate_feed(base_url: str) -> str:
 
 @app.get("/")
 def index() -> dict:
-    """Simple index endpoint."""
-    episodes = load_episodes()
-    info = get_programme_info()
-    return {
-        "title": info.title,
-        "episodes": len(episodes),
-        "feed_url": "/feed.xml",
-    }
+    """Status info listing all configured programmes."""
+    programmes = []
+    for pid in PROGRAMME_IDS:
+        info = get_programme_info(pid)
+        programmes.append(
+            {
+                "id": pid,
+                "title": info.title,
+                "episodes": len(load_episodes(pid)),
+                "feed_url": f"/{pid}/feed.xml",
+            }
+        )
+    return {"programmes": programmes}
 
 
 @app.get("/feed.xml")
-def feed(request: Request) -> Response:
-    """Serve the podcast RSS feed."""
+def legacy_feed(request: Request) -> Response:
+    """Legacy feed URL: serves the default (first-configured) programme."""
     base_url = str(request.base_url).rstrip("/")
-    xml = generate_feed(base_url)
+    xml = generate_feed(DEFAULT_PROGRAMME_ID, base_url)
     return Response(content=xml, media_type="application/rss+xml")
 
 
 @app.get("/audio/{filename}")
-def audio(filename: str) -> FileResponse:
+def legacy_audio(filename: str) -> FileResponse:
+    """Legacy audio URL: looks in the default programme's audio dir."""
+    file_path = audio_dir(DEFAULT_PROGRAMME_ID) / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=file_path,
+        media_type="audio/mpeg",
+        filename=filename,
+    )
+
+
+@app.get("/{programme_id}/feed.xml")
+def feed(programme_id: str, request: Request) -> Response:
+    """Serve the podcast RSS feed for a programme."""
+    _require_programme(programme_id)
+    base_url = str(request.base_url).rstrip("/")
+    xml = generate_feed(programme_id, base_url)
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@app.get("/{programme_id}/audio/{filename}")
+def audio(programme_id: str, filename: str) -> FileResponse:
     """Serve audio files with range request support."""
-    file_path = AUDIO_DIR / filename
+    _require_programme(programme_id)
+    file_path = audio_dir(programme_id) / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(
         path=file_path,
         media_type="audio/mpeg",
@@ -99,8 +154,6 @@ def main() -> None:
     """Run the uvicorn server."""
     import uvicorn
 
-    DATA_DIR.mkdir(exist_ok=True)
-    AUDIO_DIR.mkdir(exist_ok=True)
     uvicorn.run(app, host="0.0.0.0", port=5000)
 
 
