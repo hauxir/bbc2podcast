@@ -18,9 +18,9 @@ COPY bbc2podcast ./bbc2podcast
 RUN uv sync --frozen --no-dev
 
 # Create data directory
-RUN mkdir -p /app/data/audio
+RUN mkdir -p /app/data
 
-ENV PROGRAMME_ID=b00v4tv3
+ENV PROGRAMME_IDS=b00v4tv3
 
 EXPOSE 5000
 

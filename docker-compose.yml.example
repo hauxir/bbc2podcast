@@ -29,7 +29,9 @@ services:
       gluetun:
         condition: service_healthy
     environment:
-      - PROGRAMME_ID=${PROGRAMME_ID:-b00v4tv3}
+      # Single programme: PROGRAMME_ID=b00v4tv3
+      # Multiple programmes: PROGRAMME_IDS=b00v4tv3,b006ww1y
+      - PROGRAMME_IDS=${PROGRAMME_IDS:-b00v4tv3}
     volumes:
       - ./data:/app/data
     labels:
