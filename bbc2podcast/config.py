@@ -90,9 +90,7 @@ def _squarify_image_url(image_url: str | None) -> str | None:
     """Rewrite a BBC image URL to use a square recipe, if it matches the pattern."""
     if not image_url:
         return image_url
-    new_url, count = _IMAGE_RECIPE_RE.subn(
-        rf"\g<1>{SQUARE_IMAGE_RECIPE}\g<2>", image_url
-    )
+    new_url, count = _IMAGE_RECIPE_RE.subn(rf"\g<1>{SQUARE_IMAGE_RECIPE}\g<2>", image_url)
     return new_url if count else image_url
 
 
