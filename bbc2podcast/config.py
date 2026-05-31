@@ -78,6 +78,24 @@ def migrate_legacy_data() -> None:
             pass
 
 
+# BBC's image CDN serves any recipe (size) for a given image id by swapping the
+# WIDTHxHEIGHT segment of the URL. The og:image meta tag returns a rectangular
+# crop (e.g. 1200x675) with letterboxing; podcast players expect square art, so
+# we rewrite the recipe to a square size that meets Apple's 1400px minimum.
+SQUARE_IMAGE_RECIPE = "1600x1600"
+_IMAGE_RECIPE_RE = re.compile(r"(/images/ic/)\d+x\d+(/)")
+
+
+def _squarify_image_url(image_url: str | None) -> str | None:
+    """Rewrite a BBC image URL to use a square recipe, if it matches the pattern."""
+    if not image_url:
+        return image_url
+    new_url, count = _IMAGE_RECIPE_RE.subn(
+        rf"\g<1>{SQUARE_IMAGE_RECIPE}\g<2>", image_url
+    )
+    return new_url if count else image_url
+
+
 @dataclass
 class ProgrammeInfo:
     """Programme metadata from BBC."""
@@ -115,7 +133,7 @@ def get_programme_info(programme_id: str) -> ProgrammeInfo:
 
     # Extract image URL
     img_match = re.search(r'<meta property="og:image" content="([^"]+)"', page_html)
-    image_url = img_match.group(1) if img_match else None
+    image_url = _squarify_image_url(img_match.group(1) if img_match else None)
 
     return ProgrammeInfo(
         id=programme_id,
